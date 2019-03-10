@@ -1,0 +1,67 @@
+version: '3.4'
+
+services:
+  php:
+    build:
+      context: ../api
+    depends_on:
+      - db
+    # Comment out these volumes in production
+    volumes:
+      - ../api:/srv/api:rw,cached
+      # If you develop on Linux, uncomment the following line to use a bind-mounted host directory instead
+      # - ./api/var:/srv/api/var:rw
+
+  api:
+    image: nginx:alpine
+    depends_on:
+      - php
+    # Comment out this volume in production
+    volumes:
+      - ../api/public:/srv/api/public:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d
+    ports:
+      - "8080:80"
+
+  cache-proxy:
+    image: cooptilleuls/varnish:alpine
+    depends_on:
+      - api
+    volumes:
+      - ./varnish/conf:/usr/local/etc/varnish:ro
+    tmpfs:
+      - /usr/local/var/varnish:exec
+    ports:
+      - "8081:80"
+
+  db:
+    # In production, you may want to use a managed database service
+    image: postgres:10-alpine
+    environment:
+      - POSTGRES_DB=api
+      - POSTGRES_USER=api
+      # You should definitely change the password in production
+      - POSTGRES_PASSWORD=!ChangeMe!
+    volumes:
+      - db-data:/var/lib/postgresql/data:rw
+      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
+      # - ./docker/db/data:/var/lib/postgresql/data:rw
+    ports:
+      - "5432:5432"
+
+  client:
+    # Use a static website hosting service in production
+    # See https://github.com/facebookincubator/create-react-app/blob/master/packages/react-scripts/template/README.md#deployment
+    image: node:alpine
+    working_dir: /usr/src/client
+    environment:
+      - NODE_ENV=dev
+      - PORT=80
+    volumes:
+      - ../client:/usr/src/client:rw,cached
+    command: "sh -c 'yarn && yarn start'"
+    ports:
+      - "80:80"
+
+volumes:
+  db-data: {}
